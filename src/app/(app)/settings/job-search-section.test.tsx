@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { JobSearchSettingsView } from "@/lib/job-search/sources";
 
-import { saveJobSearchDetails, saveJobSource, saveJobSourceKey, testJobSource } from "./actions";
+import { addWatchedCompany, removeWatchedCompany, saveJobSearchDetails, saveJobSource, saveJobSourceKey, testJobSource } from "./actions";
 import { JobSearchSection } from "./job-search-section";
 
 vi.mock("./actions", () => ({
+  addWatchedCompany: vi.fn(),
+  removeWatchedCompany: vi.fn(),
   saveJobSource: vi.fn(),
   saveJobSearchDetails: vi.fn(),
   saveJobSourceKey: vi.fn(),
@@ -15,7 +17,7 @@ vi.mock("./actions", () => ({
 }));
 vi.mock("@/components/toast", () => ({ toast: vi.fn(), toastResult: (result: unknown) => result }));
 
-const off: JobSearchSettingsView = { source: "OFF", jsearch: { host: "openwebninja", keyState: "none" }, adzuna: { appId: "", keyState: "none" } };
+const off: JobSearchSettingsView = { source: "OFF", jsearch: { host: "openwebninja", keyState: "none" }, adzuna: { appId: "", keyState: "none" }, companies: [] };
 const withSource = (view: Partial<JobSearchSettingsView>): JobSearchSettingsView => ({ ...off, ...view });
 
 beforeEach(() => {
@@ -29,13 +31,14 @@ beforeEach(() => {
 });
 
 describe("JobSearchSection", () => {
-  it("offers the three sources and Off, as a radio group, Off by default", () => {
+  it("offers the four sources and Off, as a radio group, Off by default", () => {
     render(<JobSearchSection initial={off} />);
     expect(screen.getByRole("heading", { name: "Job search" })).toBeInTheDocument();
     expect(screen.getAllByRole("radio").map((radio) => radio.getAttribute("aria-label"))).toEqual([
       "JSearch",
       "Adzuna",
       "Bundesagentur für Arbeit",
+      "Company boards",
       "Off",
     ]);
     expect(screen.getByRole("radio", { name: "Off" })).toBeChecked();
@@ -88,6 +91,38 @@ describe("JobSearchSection", () => {
     render(<JobSearchSection initial={withSource({ source: "ARBEITSAGENTUR" })} />);
     expect(screen.queryByLabelText(/key/i)).not.toBeInTheDocument();
     expect(screen.getByText(/isn't an official API/)).toBeInTheDocument();
+  });
+
+  it("adds companies from their careers page links, and removes them", async () => {
+    const acme = { platform: "lever" as const, slug: "acme", name: "Acme" };
+    const boards = (companies: JobSearchSettingsView["companies"]) => withSource({ source: "COMPANY_BOARDS", companies });
+    vi.mocked(addWatchedCompany).mockResolvedValue({ ok: true, data: boards([acme]) });
+    vi.mocked(removeWatchedCompany).mockResolvedValue({ ok: true, data: boards([]) });
+    render(<JobSearchSection initial={boards([])} />);
+    expect(screen.getByRole("note")).toHaveTextContent("Your searches and your profile stay here.");
+    expect(screen.getByText(/No companies yet/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Test connection" })).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText("Careers page link"), "jobs.lever.co/acme{Enter}");
+    expect(addWatchedCompany).toHaveBeenCalledWith({ link: "jobs.lever.co/acme" });
+    const list = await screen.findByRole("list", { name: "Watched companies" });
+    expect(list).toHaveTextContent("Acme");
+    expect(screen.getByRole("link", { name: "Lever · acme" })).toHaveAttribute("href", "https://jobs.lever.co/acme");
+    expect(screen.getByLabelText("Careers page link")).toHaveValue("");
+    expect(screen.getByRole("status")).toHaveTextContent("a test reads every board");
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Acme" }));
+    expect(removeWatchedCompany).toHaveBeenCalledWith({ platform: "lever", slug: "acme" });
+    expect(await screen.findByText(/No companies yet/)).toBeInTheDocument();
+  });
+
+  it("keeps a link that wasn't added, to fix", async () => {
+    vi.mocked(addWatchedCompany).mockResolvedValue({ ok: false, error: "That isn't a Greenhouse, Lever or Ashby job board." });
+    render(<JobSearchSection initial={withSource({ source: "COMPANY_BOARDS" })} />);
+    await userEvent.type(screen.getByLabelText("Careers page link"), "example.com/careers");
+    await userEvent.click(screen.getByRole("button", { name: "Add company" }));
+    await waitFor(() => expect(addWatchedCompany).toHaveBeenCalled());
+    expect(screen.getByLabelText("Careers page link")).toHaveValue("example.com/careers");
   });
 
   it("shows keys from the environment and keys that can't be read", () => {

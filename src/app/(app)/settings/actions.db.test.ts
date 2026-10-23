@@ -14,7 +14,9 @@ import { jsearchV2LastPage } from "@/test/job-search-fixtures";
 
 import {
   addDocumentLanguage,
+  addWatchedCompany,
   listAiModels,
+  removeWatchedCompany,
   saveAiProvider,
   saveApiKey,
   saveJobSearchDetails,
@@ -152,7 +154,7 @@ describe("job search settings (E14-4)", () => {
   it("saves the source, Off included, and says what the section shows", async () => {
     expect(await saveJobSource({ source: "JSEARCH" })).toEqual({
       ok: true,
-      data: { source: "JSEARCH", jsearch: { host: "openwebninja", keyState: "none" }, adzuna: { appId: "", keyState: "none" } },
+      data: { source: "JSEARCH", jsearch: { host: "openwebninja", keyState: "none" }, adzuna: { appId: "", keyState: "none" }, companies: [] },
     });
     await saveJobSource({ source: "OFF" });
     expect((await settings()).jobSource).toBe("OFF");
@@ -178,6 +180,33 @@ describe("job search settings (E14-4)", () => {
     expect((await settings()).jsearchKeyEnc).toBeNull();
     await saveJobSearchDetails({ adzunaAppId: "" });
     expect((await settings()).adzunaAppId).toBeNull();
+  });
+
+  it("watches a company's board once it answers, and stops watching it", async () => {
+    clearJobSearchCache();
+    const requests = stubFetch(({ url }) =>
+      url.pathname.endsWith("/nosuch") ? json({ status: 404 }, { status: 404 }) : json(url.hostname.startsWith("boards-api") ? { name: "Stripe" } : []),
+    );
+    expect(await addWatchedCompany({ link: "https://boards.greenhouse.io/stripe" })).toMatchObject({
+      ok: true,
+      data: { companies: [{ platform: "greenhouse", slug: "stripe", name: "Stripe" }] },
+    });
+    expect(requests[0]?.url.href).toBe("https://boards-api.greenhouse.io/v1/boards/stripe");
+    await addWatchedCompany({ link: "jobs.lever.co/acme-corp/123" });
+    expect((await settings()).watchedCompanies).toEqual([
+      { platform: "greenhouse", slug: "stripe", name: "Stripe" },
+      { platform: "lever", slug: "acme-corp", name: "Acme Corp" },
+    ]);
+
+    expect(await addWatchedCompany({ link: "https://job-boards.greenhouse.io/STRIPE" })).toEqual({ ok: false, error: "You're already watching that company." });
+    expect(await addWatchedCompany({ link: "https://example.com/careers" })).toMatchObject({ ok: false, error: expect.stringMatching(/isn't a Greenhouse, Lever or Ashby job board/) });
+    expect(await addWatchedCompany({ link: "jobs.ashbyhq.com/nosuch" })).toMatchObject({ ok: false, error: expect.stringMatching(/^Ashby has no job board at that link/) });
+    expect((await settings()).watchedCompanies).toHaveLength(2);
+
+    expect(await removeWatchedCompany({ platform: "greenhouse", slug: "stripe" })).toMatchObject({
+      ok: true,
+      data: { companies: [{ platform: "lever", slug: "acme-corp" }] },
+    });
   });
 
   it("saves where the JSearch key is from", async () => {

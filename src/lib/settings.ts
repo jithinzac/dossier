@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { AiProvider, Creativity, DateFormat, PaperSize, Tone } from "@/generated/prisma/enums";
+import { watchedCompanySchema } from "@/lib/job-search/boards";
 import { EMPTY_QUERY, JOB_SOURCES, JSEARCH_HOSTS, searchQuerySchema } from "@/lib/job-search/search";
 
 /** Date styles for documents (SET-6), labelled with an example as in the prototype. */
@@ -151,6 +152,8 @@ export const settingsSchema = z.object({
   jsearchHost: z.enum(JSEARCH_HOSTS).catch("openwebninja"),
   adzunaAppId: z.string().nullable().catch(null),
   adzunaKeyEnc: z.string().nullable().catch(null),
+  /** The companies Company boards searches, in the order they were added; not secret, so exports keep them. */
+  watchedCompanies: json(z.array(watchedCompanySchema)).catch([]),
   // Job agent (E16): one search, run once a day. Off until it's turned on.
   // It asks the source in Settings → Job search, with its key.
   agentEnabled: flag(false),

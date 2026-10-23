@@ -1,3 +1,4 @@
+import type { WatchedCompany } from "./boards";
 import type { JobSource, JSearchHost } from "./search";
 
 /** What Settings → Job search may know about a source's key: never the key itself. "env" means it comes from the environment. */
@@ -8,6 +9,8 @@ export type JobSearchSettingsView = {
   source: JobSource | "OFF";
   jsearch: { host: JSearchHost; keyState: JobKeyState };
   adzuna: { appId: string; keyState: JobKeyState };
+  /** The companies whose boards are searched; not secret. */
+  companies: WatchedCompany[];
 };
 
 export const JOB_KEY_UNREADABLE = "Your saved key can't be read. Please enter it again.";
@@ -62,6 +65,15 @@ export const SOURCE_INFO: Record<JobSource, SourceInfo> = {
     quotaPeriod: null,
     attribution: "Source: Bundesagentur für Arbeit",
     countries: ["de"],
+  },
+  COMPANY_BOARDS: {
+    name: "Company boards",
+    description: "The job boards of companies you choose, on Greenhouse, Lever and Ashby, with full postings.",
+    tag: "Any country · free, no key · only the companies you add",
+    keyUrl: null,
+    quotaPeriod: null,
+    attribution: null,
+    countries: null,
   },
 };
 

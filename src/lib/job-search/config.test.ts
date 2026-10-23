@@ -6,7 +6,7 @@ import { credentialsFor, jobSearchView, requestContext, resolveJobSearchConfig }
 
 vi.mock("@/lib/env", () => ({ env: { DOSSIER_SECRET: "a".repeat(32) } }));
 
-const nothingSaved = { jobSource: null, jsearchKeyEnc: null, jsearchHost: "openwebninja" as const, adzunaAppId: null, adzunaKeyEnc: null };
+const nothingSaved = { jobSource: null, jsearchKeyEnc: null, jsearchHost: "openwebninja" as const, adzunaAppId: null, adzunaKeyEnc: null, watchedCompanies: [] };
 const noEnv = {};
 
 describe("resolveJobSearchConfig", () => {
@@ -17,6 +17,7 @@ describe("resolveJobSearchConfig", () => {
       source: "OFF",
       jsearch: { host: "openwebninja", keyState: "none" },
       adzuna: { appId: "", keyState: "none" },
+      companies: [],
     });
   });
 
@@ -44,6 +45,7 @@ describe("resolveJobSearchConfig", () => {
       jsearchHost: "openwebninja" as const,
       adzunaAppId: "app-saved",
       adzunaKeyEnc: encryptSecret(JOB_SOURCE_KEY, "adz-saved"),
+      watchedCompanies: [{ platform: "lever" as const, slug: "acme", name: "Acme" }],
     };
     const config = resolveJobSearchConfig(saved, { DOSSIER_JOBS_SOURCE: "jsearch", DOSSIER_JSEARCH_KEY: "ak_env", DOSSIER_JSEARCH_HOST: "rapidapi" });
     expect(config).toMatchObject({
@@ -52,6 +54,7 @@ describe("resolveJobSearchConfig", () => {
       jsearch: { key: "ak_saved", host: "openwebninja", keyState: "set" },
       adzuna: { appId: "app-saved", key: "adz-saved", keyState: "set" },
     });
+    expect(credentialsFor(config, "COMPANY_BOARDS")).toEqual({ companies: [{ platform: "lever", slug: "acme", name: "Acme" }] });
     expect(resolveJobSearchConfig({ ...saved, jobSource: "OFF" }, { DOSSIER_JOBS_SOURCE: "jsearch" })).toMatchObject({ source: null, saved: true });
   });
 
@@ -81,6 +84,7 @@ describe("credentialsFor", () => {
     expect(() => credentialsFor(resolveJobSearchConfig(nothingSaved, noEnv), "JSEARCH")).toThrow("Add your JSearch key in Settings → Job search first.");
     const keyOnly = resolveJobSearchConfig({ ...nothingSaved, adzunaKeyEnc: encryptSecret(JOB_SOURCE_KEY, "adz") }, noEnv);
     expect(() => credentialsFor(keyOnly, "ADZUNA")).toThrow(/app ID and key/);
+    expect(() => credentialsFor(resolveJobSearchConfig(nothingSaved, noEnv), "COMPANY_BOARDS")).toThrow("Add the companies to watch in Settings → Job search first.");
   });
 });
 

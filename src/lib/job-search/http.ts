@@ -8,13 +8,13 @@ import type { JobSource } from "./search";
 // requests are still limited in time and size.
 
 export const REQUEST_TIMEOUT_MS = 10_000;
-const MAX_BYTES = 5 * 1024 * 1024;
+export const MAX_BYTES = 5 * 1024 * 1024;
 
 /** GETs JSON from a source, turning every failure into a JobSearchError. */
 export async function requestJson(
   source: JobSource,
   url: URL,
-  { headers = {}, signal }: { headers?: Record<string, string>; signal?: AbortSignal } = {},
+  { headers = {}, signal, maxBytes = MAX_BYTES }: { headers?: Record<string, string>; signal?: AbortSignal; maxBytes?: number } = {},
 ): Promise<unknown> {
   const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let response: Response;
@@ -34,8 +34,8 @@ export async function requestJson(
   if (response.status === 429) throw jobSearchError("quota", source, { detail });
   if (!response.ok) throw jobSearchError(response.status >= 500 ? "unavailable" : "changed", source, { detail });
 
-  const text = await readLimited(response, MAX_BYTES);
-  if (text === null) throw jobSearchError("changed", source, { detail: `${url.pathname}: answer over ${MAX_BYTES} bytes` });
+  const text = await readLimited(response, maxBytes);
+  if (text === null) throw jobSearchError("changed", source, { detail: `${url.pathname}: answer over ${maxBytes} bytes` });
   try {
     return JSON.parse(text) as unknown;
   } catch {

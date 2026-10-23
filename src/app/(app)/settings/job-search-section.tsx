@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { BOARD_PLATFORM_NAMES, boardLink, companyKey, MAX_WATCHED_COMPANIES, type WatchedCompany } from "@/lib/job-search/boards";
 import { JOB_SOURCES, type JobSource, type JSearchHost } from "@/lib/job-search/search";
 import { JOB_KEY_UNREADABLE, JSEARCH_KEY_URLS, SOURCE_INFO, type JobKeyState, type JobSearchSettingsView } from "@/lib/job-search/sources";
 import { cn } from "@/lib/cn";
 
-import { saveJobSearchDetails, saveJobSource, saveJobSourceKey, testJobSource } from "./actions";
+import { addWatchedCompany, removeWatchedCompany, saveJobSearchDetails, saveJobSource, saveJobSourceKey, testJobSource } from "./actions";
 import { SettingsSectionIntro } from "./settings-screen";
 
 type Choice = JobSource | "OFF";
@@ -72,6 +73,16 @@ export function JobSearchSection({ initial }: { initial: JobSearchSettingsView }
     return apply(toastResult(await track(saveJobSourceKey({ source: keySource, change }))));
   };
 
+  const addCompany = async (link: string) => {
+    changed();
+    return apply(toastResult(await track(addWatchedCompany({ link }))));
+  };
+
+  const removeCompany = async (company: WatchedCompany) => {
+    changed();
+    apply(toastResult(await track(removeWatchedCompany({ platform: company.platform, slug: company.slug }))));
+  };
+
   const test = async () => {
     if (connection.status === "testing") return;
     setConnection({ status: "testing" });
@@ -121,7 +132,9 @@ export function JobSearchSection({ initial }: { initial: JobSearchSettingsView }
       {source !== "OFF" && (
         <>
           <p role="note" className="rounded-card bg-warning-surface px-4 py-3 text-meta text-warning">
-            Your searches (keywords, place and filters) go to {SOURCE_INFO[source].name}. Nothing from your profile does.
+            {source === "COMPANY_BOARDS"
+              ? "Dossier reads the job boards of the companies below from Greenhouse, Lever and Ashby, and matches your searches on your server. Your searches and your profile stay here."
+              : `Your searches (keywords, place and filters) go to ${SOURCE_INFO[source].name}. Nothing from your profile does.`}
           </p>
 
           <Card className="flex flex-col gap-5">
@@ -164,8 +177,16 @@ export function JobSearchSection({ initial }: { initial: JobSearchSettingsView }
               </p>
             )}
 
+            {source === "COMPANY_BOARDS" && (
+              <CompanyList companies={view.companies} onAdd={addCompany} onRemove={(company) => void removeCompany(company)} />
+            )}
+
             <div className="flex flex-wrap items-center gap-3.5 pt-1">
-              <Button variant="secondary" onClick={() => void test()} disabled={connection.status === "testing"}>
+              <Button
+                variant="secondary"
+                onClick={() => void test()}
+                disabled={connection.status === "testing" || (source === "COMPANY_BOARDS" && view.companies.length === 0)}
+              >
                 {connection.status === "testing" ? "Testing…" : "Test connection"}
               </Button>
               <ConnectionStatus connection={connection} source={source} />
@@ -194,6 +215,82 @@ function HostChoice({ host, onChange }: { host: JSearchHost; onChange: (host: JS
         value={host}
         onValueChange={onChange}
       />
+    </div>
+  );
+}
+
+/**
+ * The companies Company boards searches: added from a careers page link,
+ * which is checked before it's kept, and removed one by one.
+ */
+function CompanyList({
+  companies,
+  onAdd,
+  onRemove,
+}: {
+  companies: WatchedCompany[];
+  onAdd: (link: string) => Promise<boolean>;
+  onRemove: (company: WatchedCompany) => void;
+}) {
+  const hintId = useId();
+  const [link, setLink] = useState("");
+  const [adding, setAdding] = useState(false);
+  const full = companies.length >= MAX_WATCHED_COMPANIES;
+  const add = async () => {
+    if (!link.trim() || adding || full) return;
+    setAdding(true);
+    try {
+      if (await onAdd(link)) setLink("");
+    } finally {
+      setAdding(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-4">
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void add();
+        }}
+      >
+        <Input
+          label="Careers page link"
+          className="min-w-[260px] flex-1"
+          value={link}
+          spellCheck={false}
+          autoComplete="off"
+          placeholder="jobs.lever.co/acme"
+          aria-describedby={hintId}
+          onChange={(event) => setLink(event.target.value)}
+        />
+        <Button type="submit" variant="secondary" disabled={!link.trim() || adding || full}>
+          {adding ? "Checking…" : "Add company"}
+        </Button>
+        <p id={hintId} className="basis-full text-xs text-muted">
+          {full ? `You're watching ${MAX_WATCHED_COMPANIES} companies, the most there can be.` : "A company's jobs page on Greenhouse, Lever or Ashby."}
+        </p>
+      </form>
+
+      {companies.length === 0 ? (
+        <p className="text-sm text-muted">No companies yet. Add the ones you&apos;d like to work at, and Find jobs and the job agent search their boards.</p>
+      ) : (
+        <ul aria-label="Watched companies" className="flex flex-col divide-y divide-line-card rounded-card border border-line-card">
+          {companies.map((company) => (
+            <li key={companyKey(company)} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-medium">{company.name}</span>
+                <a href={boardLink(company)} target="_blank" rel="noopener noreferrer" className="truncate text-xs text-muted underline-offset-2 hover:text-ink hover:underline">
+                  {BOARD_PLATFORM_NAMES[company.platform]} · {company.slug}
+                </a>
+              </span>
+              <Button variant="text" size="sm" aria-label={`Remove ${company.name}`} onClick={() => onRemove(company)}>
+                Remove
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -265,7 +362,15 @@ function ConnectionStatus({ connection, source }: { connection: Connection; sour
         ? ["bg-error", "text-error", connection.message]
         : connection.status === "testing"
           ? ["bg-status-offer", "text-muted", "Sending a small search…"]
-          : ["bg-faint", "text-muted", source === "JSEARCH" ? "Not tested since your last change · a test uses one search from your plan" : "Not tested since your last change"];
+          : [
+              "bg-faint",
+              "text-muted",
+              source === "JSEARCH"
+                ? "Not tested since your last change · a test uses one search from your plan"
+                : source === "COMPANY_BOARDS"
+                  ? "Not tested since your last change · a test reads every board"
+                  : "Not tested since your last change",
+            ];
   return (
     <p role="status" className={cn("flex items-center gap-2 text-control", text)}>
       <span aria-hidden className={cn("size-2 flex-none rounded-full", dot)} />

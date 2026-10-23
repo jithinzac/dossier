@@ -61,6 +61,7 @@ describe("stored settings", () => {
       jsearchHost: "openwebninja",
       adzunaAppId: null,
       adzunaKeyEnc: null,
+      watchedCompanies: [],
       agentEnabled: false,
       agentQuery: { keywords: "", place: "", country: "", radiusKm: 25, remoteOnly: false, postedWithin: "any" },
       agentHour: 7,

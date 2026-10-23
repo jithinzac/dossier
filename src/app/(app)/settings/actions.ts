@@ -14,6 +14,9 @@ import { DOCUMENT_LANGUAGES } from "@/lib/document-language";
 import { deleteAllBackups } from "@/lib/backups";
 import { env } from "@/lib/env";
 import { JobSearchError, testSource } from "@/lib/job-search";
+import { BOARD_PLATFORMS, companyFromLink, companyKey, MAX_WATCHED_COMPANIES } from "@/lib/job-search/boards";
+import { clearJobSearchCache } from "@/lib/job-search/cache";
+import { checkBoard } from "@/lib/job-search/company-boards";
 import { credentialsFor, jobSearchView, loadJobSearchConfig, requestContext } from "@/lib/job-search/config";
 import { JOB_SOURCES, JSEARCH_HOSTS } from "@/lib/job-search/search";
 import { cancelJob, startJob } from "@/lib/jobs/runner";
@@ -140,6 +143,42 @@ export const saveJobSourceKey = action(
     const field = source === "JSEARCH" ? "jsearchKeyEnc" : "adzunaKeyEnc";
     const current = await loadSettings();
     await saveSettings({ [field]: applySecretChange(JOB_SOURCE_KEY, current[field], change) });
+    return loadView();
+  },
+);
+
+/**
+ * Watches a company's job board for Company boards, from its careers page
+ * link, once the board answers. Searches kept in memory are dropped, so the
+ * next one reads the new board.
+ */
+export const addWatchedCompany = action(z.object({ link: z.string().trim().min(1).max(2000) }), async ({ link }) => {
+  const company = companyFromLink(link);
+  if (!company) {
+    throw new ActionError("That isn't a Greenhouse, Lever or Ashby job board. Paste the link of the company's jobs page, like jobs.lever.co/acme.");
+  }
+  const { watchedCompanies } = await loadSettings();
+  if (watchedCompanies.some((entry) => companyKey(entry) === companyKey(company))) throw new ActionError("You're already watching that company.");
+  if (watchedCompanies.length >= MAX_WATCHED_COMPANIES) throw new ActionError(`You can watch up to ${MAX_WATCHED_COMPANIES} companies. Remove one first.`);
+  try {
+    const name = await checkBoard(company, requestContext("COMPANY_BOARDS"));
+    if (name) company.name = name;
+  } catch (error) {
+    if (error instanceof JobSearchError) throw new ActionError(error.message);
+    throw error;
+  }
+  await saveSettings({ watchedCompanies: [...watchedCompanies, company] });
+  clearJobSearchCache();
+  return loadView();
+});
+
+/** Stops watching a company's board. */
+export const removeWatchedCompany = action(
+  z.object({ platform: z.enum(BOARD_PLATFORMS), slug: z.string().min(1).max(100) }),
+  async (company) => {
+    const { watchedCompanies } = await loadSettings();
+    await saveSettings({ watchedCompanies: watchedCompanies.filter((entry) => companyKey(entry) !== companyKey(company)) });
+    clearJobSearchCache();
     return loadView();
   },
 );

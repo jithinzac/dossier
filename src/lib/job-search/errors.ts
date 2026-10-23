@@ -36,13 +36,16 @@ export class JobSearchError extends Error {
 export function jobSearchError(problem: JobSearchProblem, source: JobSource, { country = "", detail }: { country?: string; detail?: string } = {}) {
   const { name, quotaPeriod } = SOURCE_INFO[source];
   const message = {
-    "no-key": `Add your ${name} ${source === "ADZUNA" ? "app ID and key" : "key"} in Settings → Job search first.`,
+    "no-key":
+      source === "COMPANY_BOARDS"
+        ? "Add the companies to watch in Settings → Job search first."
+        : `Add your ${name} ${source === "ADZUNA" ? "app ID and key" : "key"} in Settings → Job search first.`,
     key: `${name} didn't accept your key. Check it in Settings → Job search.`,
     quota: quotaPeriod
       ? `You've used up your ${name} searches for ${quotaPeriod}. Try again then, or move to a bigger plan.`
       : `${name} is limiting searches right now. Wait a minute and try again.`,
     country: `${name} doesn't list jobs in ${countryName(country)}. Choose another country, or another source in Settings → Job search.`,
-    unavailable: `${name} isn't answering right now. Try again in a minute.`,
+    unavailable: source === "COMPANY_BOARDS" ? "None of the company boards are answering right now. Try again in a minute." : `${name} isn't answering right now. Try again in a minute.`,
     changed:
       source === "ARBEITSAGENTUR"
         ? "The Arbeitsagentur's job search has changed or isn't answering. Try another source in Settings → Job search."

@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { WatchedCompany } from "./boards";
 import type { FoundPosting, JobSource, JSearchHost, SearchPage, SearchQuery } from "./search";
 
 // What every job source implements (E14-1). Adapters turn a source's own
@@ -13,6 +14,8 @@ export type SourceCredentials = {
   JSEARCH: { key: string; host: JSearchHost };
   ADZUNA: { appId: string; key: string };
   ARBEITSAGENTUR: Record<string, never>;
+  /** No key: the companies whose boards to search. */
+  COMPANY_BOARDS: { companies: WatchedCompany[] };
 };
 
 export type RequestContext = {

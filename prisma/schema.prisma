@@ -537,11 +537,13 @@ model Note {
 
 // ─── Job search (E14) ────────────────────────────────────────────────────────
 
-/// The job sources Find jobs can search (E14-1 to E14-3).
+/// The job sources Find jobs can search (E14-1 to E14-3), and the company
+/// boards on Greenhouse, Lever and Ashby the user watches.
 enum PostingSource {
   JSEARCH
   ADZUNA
   ARBEITSAGENTUR
+  COMPANY_BOARDS
 }
 
 /// A posting from Find jobs that the user kept (E14-5): saved, dismissed, or

@@ -6,6 +6,7 @@ import type { SettingsData } from "@/lib/settings";
 import { loadSettings } from "@/lib/settings-data";
 
 import type { RequestContext, SourceCredentials } from "./adapter";
+import type { WatchedCompany } from "./boards";
 import { JobSearchError, jobSearchError } from "./errors";
 import type { JobSource, JSearchHost } from "./search";
 import { SOURCE_INFO, type JobKeyState, type JobSearchSettingsView } from "./sources";
@@ -21,9 +22,11 @@ export type JobSearchConfig = {
   saved: boolean;
   jsearch: { key: string | null; host: JSearchHost; keyState: JobKeyState };
   adzuna: { appId: string; key: string | null; keyState: JobKeyState };
+  /** The companies whose boards Company boards searches. */
+  companies: WatchedCompany[];
 };
 
-type SavedJobSettings = Pick<SettingsData, "jobSource" | "jsearchKeyEnc" | "jsearchHost" | "adzunaAppId" | "adzunaKeyEnc">;
+type SavedJobSettings = Pick<SettingsData, "jobSource" | "jsearchKeyEnc" | "jsearchHost" | "adzunaAppId" | "adzunaKeyEnc" | "watchedCompanies">;
 type JobEnv = Pick<Env, "DOSSIER_JOBS_SOURCE" | "DOSSIER_JSEARCH_KEY" | "DOSSIER_JSEARCH_HOST" | "DOSSIER_ADZUNA_APP_ID" | "DOSSIER_ADZUNA_KEY">;
 
 const FROM_ENV: Record<NonNullable<Env["DOSSIER_JOBS_SOURCE"]>, JobSource | null> = {
@@ -60,6 +63,7 @@ export function resolveJobSearchConfig(saved: SavedJobSettings, source: JobEnv, 
       appId: saved.adzunaAppId ?? source.DOSSIER_ADZUNA_APP_ID ?? "",
       ...keyOf(saved.adzunaKeyEnc, source.DOSSIER_ADZUNA_KEY, secret),
     },
+    companies: saved.watchedCompanies,
   };
 }
 
@@ -74,6 +78,7 @@ export function jobSearchView(config: JobSearchConfig): JobSearchSettingsView {
     source: config.source ?? "OFF",
     jsearch: { host: config.jsearch.host, keyState: config.jsearch.keyState },
     adzuna: { appId: config.adzuna.appId, keyState: config.adzuna.keyState },
+    companies: config.companies,
   };
 }
 
@@ -101,6 +106,10 @@ export function credentialsFor<S extends JobSource>(config: JobSearchConfig, sou
       const { appId, key, keyState } = config.adzuna;
       if (!key || !appId) throw missing(keyState);
       return { appId, key } as SourceCredentials[S];
+    }
+    case "COMPANY_BOARDS": {
+      if (config.companies.length === 0) throw jobSearchError("no-key", source);
+      return { companies: config.companies } as SourceCredentials[S];
     }
     default:
       return {} as SourceCredentials[S];

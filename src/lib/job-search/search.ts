@@ -11,8 +11,8 @@ import { countryCodeFor } from "./countries";
 // In this code "job" already means a background task (src/lib/jobs), so a
 // job ad is a "posting".
 
-/** The job sources Dossier can search (E14-1 to E14-3), in the order Settings lists them; one is chosen there. */
-export const JOB_SOURCES = [PostingSource.JSEARCH, PostingSource.ADZUNA, PostingSource.ARBEITSAGENTUR] as const;
+/** The job sources Dossier can search (E14-1 to E14-3, and company boards), in the order Settings lists them; one is chosen there. */
+export const JOB_SOURCES = [PostingSource.JSEARCH, PostingSource.ADZUNA, PostingSource.ARBEITSAGENTUR, PostingSource.COMPANY_BOARDS] as const;
 export type JobSource = PostingSource;
 
 /** Where a JSearch key comes from: OpenWeb Ninja directly, or the RapidAPI marketplace. */
